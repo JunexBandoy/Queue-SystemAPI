@@ -1,0 +1,120 @@
+name: Laravel API — CI/CD (SFTP + SSH)
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🧰 Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, intl, pdo_mysql, openssl, bcmath, curl, xml, zip
+          tools: composer:v2
+          coverage: none
+
+      - name: 🧳 Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: 📦 Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: 🧪 Run tests (sqlite memory to be faster)
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ":memory:"
+        run: php artisan test --no-coverage
+
+      # ── Deploy: upload code via SFTP (excluding junk) ───────────────────────────
+      - name: 🌐 SFTP Upload (incremental)
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+        with:
+          server: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USERNAME }}
+          password: ${{ secrets.HOSTINGER_PASSWORD }}
+          port: ${{ secrets.HOSTINGER_PORT || 22 }}
+          local_path: ./*
+          remote_path: ${{ secrets.HOSTINGER_REMOTE_PATH }}
+          sftp_only: true
+          delete_remote_files: false
+          exclude: |
+            **/.git*
+            **/.github/**
+            node_modules/**
+            vendor/**        # we’ll install vendor on server via SSH
+            tests/**
+            storage/logs/**
+            storage/framework/cache/**
+            storage/framework/sessions/**
+            storage/framework/views/**
+            .env
+
+      # ── Remote SSH: composer install, env sync, cache, migrate ─────────────────
+      - name: 🔐 SSH — Post-deploy setup
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USERNAME }}
+          password: ${{ secrets.HOSTINGER_PASSWORD }}
+          port: ${{ secrets.HOSTINGER_PORT || 22 }}
+          script_stop: true
+          script: |
+            cd ${{ secrets.HOSTINGER_REMOTE_PATH }}
+
+            # Ensure correct PHP (adjust path if Hostinger uses php82, php81, etc.)
+            PHP=php
+
+            # Install composer deps on server (Hostinger has Composer on many plans; if not, upload composer.phar)
+            if ! command -v composer &> /dev/null; then
+              echo "Composer not found, downloading locally"
+              curl -sS https://getcomposer.org/installer | $PHP
+              $PHP composer.phar install --no-dev --prefer-dist --optimize-autoloader
+            else
+              composer install --no-dev --prefer-dist --optimize-autoloader
+            fi
+
+            # Create storage symlinks & permissions
+            $PHP artisan storage:link || true
+            chmod -R ug+rw storage bootstrap/cache || true
+            find storage -type d -exec chmod 775 {} \; || true
+            find storage -type f -exec chmod 664 {} \; || true
+
+            # Ensure .env exists: append/update selected keys
+            if [ ! -f ".env" ]; then cp .env.example .env; fi
+            php -r "file_put_contents('.env', preg_replace('/^APP_ENV=.*/m','APP_ENV=${{ secrets.APP_ENV || 'production' }}', file_get_contents('.env')));"
+            php -r "file_put_contents('.env', preg_replace('/^APP_DEBUG=.*/m','APP_DEBUG=false', file_get_contents('.env')));"
+            <?# Only write DB vars if provided ?>
+            [ -n "${{ secrets.DB_HOST }}" ] && php -r "file_put_contents('.env', preg_replace('/^DB_HOST=.*/m','DB_HOST=${{ secrets.DB_HOST }}', file_get_contents('.env')));"
+            [ -n "${{ secrets.DB_DATABASE }}" ] && php -r "file_put_contents('.env', preg_replace('/^DB_DATABASE=.*/m','DB_DATABASE=${{ secrets.DB_DATABASE }}', file_get_contents('.env')));"
+            [ -n "${{ secrets.DB_USERNAME }}" ] && php -r "file_put_contents('.env', preg_replace('/^DB_USERNAME=.*/m','DB_USERNAME=${{ secrets.DB_USERNAME }}', file_get_contents('.env')));"
+            [ -n "${{ secrets.DB_PASSWORD }}" ] && php -r "file_put_contents('.env', preg_replace('/^DB_PASSWORD=.*/m','DB_PASSWORD=${{ secrets.DB_PASSWORD }}', file_get_contents('.env')));"
+            [ -n "${{ secrets.DB_PORT }}" ] && php -r "file_put_contents('.env', preg_replace('/^DB_PORT=.*/m','DB_PORT=${{ secrets.DB_PORT }}', file_get_contents('.env')));"
+
+            # App key (generate if missing)
+            if ! grep -q "^APP_KEY=" .env || [ -z "$(grep '^APP_KEY=' .env | cut -d= -f2)" ]; then
+              $PHP artisan key:generate --force
+            fi
+
+            # Caches & optimize
+            $PHP artisan config:clear
+            $PHP artisan route:clear
+            $PHP artisan view:clear
+            $PHP artisan config:cache
+            $PHP artisan route:cache
+
+            # Database migrations (ensure DB creds valid)
+            $PHP artisan migrate --force
+
+            # Optional: queue restart
+            $PHP artisan queue:restart || true
