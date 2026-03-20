@@ -25,7 +25,7 @@ Route::get('/admin/metrics', fn () => ['ok' => true])
     ->middleware(['auth:sanctum', 'role:admin']);
 
 // Health check
-Route::get('/health', fn () => ['ok' => true]);
+// Route::get('/health', fn () => ['ok' => true]);
 
 // ---------- TOKEN AUTH ----------
 Route::post('/token/login', [TokenAuthController::class, 'login'])
