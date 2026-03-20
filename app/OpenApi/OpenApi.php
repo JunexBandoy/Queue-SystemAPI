@@ -13,12 +13,14 @@ namespace App\OpenApi;
  *     url="/",
  *     description="Current server"
  *   ),
- *   @OA\SecurityScheme(
- *     securityScheme="sanctum",
- *     type="apiKey",
- *     in="header",
- *     name="Authorization",
- *     description="Use format: Bearer {token}"
+ *   @OA\Components(
+ *     @OA\SecurityScheme(
+ *       securityScheme="sanctum",
+ *       type="apiKey",
+ *       in="header",
+ *       name="Authorization",
+ *       description="Use format: Bearer {token}"
+ *     )
  *   )
  * )
  */
