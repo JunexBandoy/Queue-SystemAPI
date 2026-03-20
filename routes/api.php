@@ -1,5 +1,5 @@
 <?php
-
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\TokenAuthController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ServingController;
@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Route;
 | API Routes
 |--------------------------------------------------------------------------
 */
-
+Route::get('/health', HealthController::class);
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
