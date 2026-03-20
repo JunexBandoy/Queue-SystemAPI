@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\JsonResponse;
+
 class HealthController extends Controller
 {
     /**
-     * Health check endpoint
-     *
      * @OA\Get(
      *   path="/api/health",
      *   summary="Health check",
@@ -16,13 +16,13 @@ class HealthController extends Controller
      *     description="OK",
      *     @OA\JsonContent(
      *       type="object",
-     *       @OA\Property(property="ok", type="boolean", example=true)
+     *       @OA\Property(property="status", type="string", example="ok")
      *     )
      *   )
      * )
      */
-    public function __invoke()
+    public function __invoke(): JsonResponse
     {
-        return response()->json(['ok' => true]);
+        return response()->json(['status' => 'ok']);
     }
 }
