@@ -68,6 +68,7 @@ class QueueRepository
                     'q.first_name',
                     'q.middle_initial',
                     'q.last_name',
+                    'q.purpose',
                     'q.priority as priorit',
                     'q.status',
                     'q.queue_date',
