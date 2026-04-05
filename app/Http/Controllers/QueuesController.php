@@ -23,6 +23,7 @@ class QueuesController extends Controller
                 'first_name'      => 'required|string|max:100',
                 'middle_initial'  => 'required|string|max:1',
                 'last_name'       => 'required|string|max:100',
+                'purpose'       => 'required|string|max:500',
                 'contact_number'  => 'required|string|max:20',
                 'service_id'      => 'required',
                 'priority'        => 'required|in:senior,pwd,regular',

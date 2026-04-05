@@ -17,6 +17,7 @@ class Serving extends Model
         'first_name',
         'middle_initial',
         'last_name',
+        'purpose',
         'contact_number',
         'queue_date',
         'service_name',
