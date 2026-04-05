@@ -14,6 +14,7 @@ class Waiting extends Model
 
     protected $fillable = [
         'queue_number',
+         'purpose',
         'purpose',
         'queue_date',
         'service_name',
